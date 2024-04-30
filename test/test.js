@@ -29,8 +29,28 @@ describe('url-parse', function () {
     assume(url.hostname).to.be.a('string');
   });
 
+  describe('trimLeft', function () {
+    it('removes control characters on the left', function () {
+      var i = 0;
+      var prefix = ''
+
+      for (; i < 33; i++) {
+        prefix = String.fromCharCode(i);
+        assume(parse.trimLeft(prefix + prefix +'lol')).equals('lol');
+      }
+    });
+  });
+
   describe('extractProtocol', function () {
     it('extracts the protocol data', function () {
+      assume(parse.extractProtocol('http://example.com')).eql({
+        slashes: true,
+        protocol: 'http:',
+        rest: 'example.com'
+      });
+    });
+
+    it('extracts the protocol data for nothing', function () {
       assume(parse.extractProtocol('')).eql({
         slashes: false,
         protocol: '',
@@ -45,6 +65,14 @@ describe('url-parse', function () {
         slashes: false,
         protocol: '',
         rest: input
+      });
+    });
+
+    it('trimsLeft', function () {
+      assume(parse.extractProtocol(' javascript://foo')).eql({
+        slashes: true,
+        protocol: 'javascript:',
+        rest: 'foo'
       });
     });
   });
@@ -179,6 +207,50 @@ describe('url-parse', function () {
     assume(parsed.pathname).equals('/b/c');
   });
 
+  it('ignores \\ in pathnames', function () {
+    var url = 'http://google.com:80\\@yahoo.com/#what\\is going on'
+      , parsed = parse(url);
+
+    assume(parsed.port).equals('');
+    assume(parsed.username).equals('');
+    assume(parsed.password).equals('');
+    assume(parsed.hostname).equals('google.com');
+    assume(parsed.hash).equals('#what\\is going on');
+
+    parsed = parse('//\\what-is-up.com');
+    assume(parsed.pathname).equals('/what-is-up.com');
+  });
+
+  it('correctly ignores multiple slashes //', function () {
+    var url = '////what-is-up.com'
+      , parsed = parse(url);
+
+    assume(parsed.host).equals('');
+    assume(parsed.hostname).equals('');
+  });
+
+  it('handles the case where the port is specified but empty', function () {
+    var parsed = parse('http://example.com:');
+
+    assume(parsed.protocol).equals('http:');
+    assume(parsed.port).equals('');
+    assume(parsed.host).equals('example.com');
+    assume(parsed.hostname).equals('example.com');
+    assume(parsed.pathname).equals('');
+    assume(parsed.origin).equals('http://example.com');
+    assume(parsed.href).equals('http://example.com');
+
+    parsed = parse('http://example.com::');
+
+    assume(parsed.protocol).equals('http:');
+    assume(parsed.port).equals('');
+    assume(parsed.host).equals('example.com:');
+    assume(parsed.hostname).equals('example.com:');
+    assume(parsed.pathname).equals('');
+    assume(parsed.origin).equals('http://example.com:');
+    assume(parsed.href).equals('http://example.com::');
+  });
+
   describe('origin', function () {
     it('generates an origin property', function () {
       var url = 'http://google.com:80/pathname'
@@ -238,6 +310,13 @@ describe('url-parse', function () {
 
       o = parse('wss://google.com:80/pathname');
       assume(o.origin).equals('wss://google.com:80');
+    });
+
+    it('maintains the port number for non-default port numbers', function () {
+      var parsed = parse('http://google.com:8080/pathname');
+
+      assume(parsed.host).equals('google.com:8080');
+      assume(parsed.href).equals('http://google.com:8080/pathname');
     });
   });
 
@@ -363,6 +442,54 @@ describe('url-parse', function () {
       assume(parsed.protocol).equals('http:');
       assume(parsed.hostname).equals('www.example.com');
       assume(parsed.href).equals(url);
+    });
+
+    it('handles @ in username', function () {
+      var url = 'http://user@@www.example.com/'
+        , parsed = parse(url);
+
+      assume(parsed.protocol).equals('http:');
+      assume(parsed.auth).equals('user%40');
+      assume(parsed.username).equals('user%40');
+      assume(parsed.password).equals('');
+      assume(parsed.hostname).equals('www.example.com');
+      assume(parsed.pathname).equals('/');
+      assume(parsed.href).equals('http://user%40@www.example.com/');
+
+      url = 'http://user%40@www.example.com/';
+      parsed = parse(url);
+
+      assume(parsed.protocol).equals('http:');
+      assume(parsed.auth).equals('user%40');
+      assume(parsed.username).equals('user%40');
+      assume(parsed.password).equals('');
+      assume(parsed.hostname).equals('www.example.com');
+      assume(parsed.pathname).equals('/');
+      assume(parsed.href).equals('http://user%40@www.example.com/');
+    });
+
+    it('handles @ in password', function () {
+      var url = 'http://user@:pas:s@@www.example.com/'
+        , parsed = parse(url);
+
+      assume(parsed.protocol).equals('http:');
+      assume(parsed.auth).equals('user%40:pas%3As%40');
+      assume(parsed.username).equals('user%40');
+      assume(parsed.password).equals('pas%3As%40');
+      assume(parsed.hostname).equals('www.example.com');
+      assume(parsed.pathname).equals('/');
+      assume(parsed.href).equals('http://user%40:pas%3As%40@www.example.com/');
+
+      url = 'http://user%40:pas%3As%40@www.example.com/'
+      parsed = parse(url);
+
+      assume(parsed.protocol).equals('http:');
+      assume(parsed.auth).equals('user%40:pas%3As%40');
+      assume(parsed.username).equals('user%40');
+      assume(parsed.password).equals('pas%3As%40');
+      assume(parsed.hostname).equals('www.example.com');
+      assume(parsed.pathname).equals('/');
+      assume(parsed.href).equals('http://user%40:pas%3As%40@www.example.com/');
     });
   });
 
